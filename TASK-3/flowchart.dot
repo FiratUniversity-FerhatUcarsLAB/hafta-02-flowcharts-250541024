@@ -1,0 +1,64 @@
+digraph HastaneYonetimSistemi {
+
+    rankdir=TB;
+    node [shape=rectangle, style=rounded, fontname="Arial"];
+
+    // Başlangıç ve ana menü
+    Basla [label="Sistem Başlatıldı"];
+    Menu [label="1 - Randevu Sistemi\n2 - Tahlil Görüntüleme\n3 - Çıkış"];
+    Secim [label="Kullanıcı Seçim Yapıyor"];
+
+    Basla -> Menu -> Secim;
+
+    // Seçim dalları
+    Secim -> RandevuModulu [label="1"];
+    Secim -> TahlilModulu [label="2"];
+    Secim -> Cikis [label="3"];
+
+    // Randevu Modülü
+    subgraph cluster_Randevu {
+        label="Randevu Sistemi Modülü";
+        style=dashed;
+
+        R1 [label="Kimlik Doğrulama"];
+        R2 [label="Poliklinik Seçimi"];
+        R3 [label="Doktor Listesini Görüntüle"];
+        R4 [label="Uygun Saatleri Göster"];
+        R5 [label="Randevu Onaylama"];
+        R6 [label="SMS Gönderme"];
+
+        RandevuModulu -> R1 -> R2 -> R3 -> R4 -> R5;
+        R5 -> R6 [label="Onay = E"];
+        R5 -> RBitir [label="Onay = H"];
+        R6 -> RBitir;
+        RBitir [label="Randevu İşlemi Bitti"];
+    }
+
+    // Tahlil Modülü
+    subgraph cluster_Tahlil {
+        label="Tahlil Sonucu Görüntüleme Modülü";
+        style=dashed;
+
+        T1 [label="Kimlik Doğrulama"];
+        T2 [label="Tahlil Varlığı Kontrolü"];
+        T3 [label="Sonuç Hazır mı?"];
+        T4 [label="Sonucu Görüntüle"];
+        T5 [label="PDF İndir"];
+        T6 [label="Bekleme Mesajı"];
+
+        TahlilModulu -> T1 -> T2;
+        T2 -> T3;
+        T3 -> T4 [label="Hazır = Evet"];
+        T3 -> T6 [label="Hazır = Hayır"];
+        T4 -> T5 [label="PDF = Evet"];
+        T4 -> TBitir [label="PDF = Hayır"];
+        T5 -> TBitir;
+        T6 -> TBitir;
+        TBitir [label="Tahlil İşlemi Bitti"];
+    }
+
+    // Çıkış
+    Cikis [label="Sistemden Çıkış"];
+    RBitir -> Menu [label="Ana Menüye Dön"];
+    TBitir -> Menu [label="Ana Menüye Dön"];
+}
