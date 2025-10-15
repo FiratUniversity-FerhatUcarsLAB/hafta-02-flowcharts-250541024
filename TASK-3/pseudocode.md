@@ -1,59 +1,123 @@
+ALGORİTMA HastaneYonetimSistemi
+
 BAŞLA
 
-    HASTALAR ← boş liste
-    DOKTORLAR ← boş liste
-    RANDEVULAR ← boş liste
+    // Ana menü
+    YAZ "HASTANE YÖNETİM SİSTEMİNE HOŞGELDİNİZ"
+    YAZ "1 - Randevu Sistemi"
+    YAZ "2 - Tahlil Sonucu Görüntüleme Sistemi"
+    YAZ "3 - Çıkış"
+    YAZ "Seçiminizi yapınız: "
+    SECIM ← GİRİŞ()
 
-    FONKSİYON hasta_kayıt()
-        hasta_ad ← GİRİŞ("Hasta adı giriniz: ")
-        hasta_tc ← GİRİŞ("TC kimlik numarası giriniz: ")
-        HASTALAR’e (hasta_ad, hasta_tc) ekle
+    EĞER SECIM = 1 İSE
+        HastaneRandevuSistemi()
+    DEĞİLSE EĞER SECIM = 2 İSE
+        TahlilSonucuGoruntulemeSistemi()
+    DEĞİLSE EĞER SECIM = 3 İSE
+        YAZ "Sistemden çıkılıyor..."
+        ÇIKIŞ YAP
+    DEĞİLSE
+        YAZ "Geçersiz seçim! Lütfen tekrar deneyiniz."
     SON
-
-    FONKSİYON doktor_kayıt()
-        doktor_ad ← GİRİŞ("Doktor adı giriniz: ")
-        branş ← GİRİŞ("Doktor branşı giriniz: ")
-        DOKTORLAR’a (doktor_ad, branş) ekle
-    SON
-
-    FONKSİYON randevu_al()
-        hasta_tc ← GİRİŞ("Randevu alacak hastanın TC’si: ")
-        doktor_ad ← GİRİŞ("Randevu alınacak doktor adı: ")
-        tarih ← GİRİŞ("Randevu tarihi (GG/AA/YYYY): ")
-        saat ← GİRİŞ("Randevu saati (SS:DD): ")
-        RANDEVULAR’a (hasta_tc, doktor_ad, tarih, saat) ekle
-        YAZ("Randevu başarıyla oluşturuldu.")
-    SON
-
-    FONKSİYON randevu_listele()
-        HER randevu İÇİN RANDEVULAR’da
-            YAZ("Hasta TC:", randevu.hasta_tc, "Doktor:", randevu.doktor_ad, 
-                "Tarih:", randevu.tarih, "Saat:", randevu.saat)
-        SON
-    SON
-
-    TEKRAR
-        YAZ("1. Hasta Kayıt")
-        YAZ("2. Doktor Kayıt")
-        YAZ("3. Randevu Al")
-        YAZ("4. Randevuları Listele")
-        YAZ("5. Çıkış")
-
-        seçim ← GİRİŞ("Seçiminizi yapınız: ")
-
-        EĞER seçim = 1 İSE
-            hasta_kayıt()
-        DEĞİLSE EĞER seçim = 2 İSE
-            doktor_kayıt()
-        DEĞİLSE EĞER seçim = 3 İSE
-            randevu_al()
-        DEĞİLSE EĞER seçim = 4 İSE
-            randevu_listele()
-        DEĞİLSE EĞER seçim = 5 İSE
-            ÇIKIŞ YAP
-        DEĞİLSE
-            YAZ("Geçersiz seçim!")
-        SON
-    SONTEKRAR
 
 BİTİR
+
+
+// -----------------------------
+// 1. MODÜL: HASTANE RANDEVU SİSTEMİ
+// -----------------------------
+PROSEDÜR HastaneRandevuSistemi()
+
+    YAZ "T.C. kimlik numaranızı giriniz: "
+    TC ← GİRİŞ()
+    YAZ "Şifrenizi giriniz: "
+    SIFRE ← GİRİŞ()
+
+    EĞER KimlikDogrula(TC, SIFRE) = DOĞRU İSE
+        YAZ "Kimlik doğrulama başarılı."
+    DEĞİLSE
+        YAZ "Kimlik doğrulama başarısız! Tekrar deneyiniz."
+        GERİ DÖN
+    SON
+
+    YAZ "Lütfen poliklinik seçiniz: "
+    POLIKLINIK_LISTESI ← PoliklinikleriGetir()
+    LISTEYI_GOSTER(POLIKLINIK_LISTESI)
+    SECILEN_POLIKLINIK ← GİRİŞ()
+
+    DOKTOR_LISTESI ← DoktorlariGetir(SECILEN_POLIKLINIK)
+    YAZ "Bu poliklinikteki doktorlar:"
+    LISTEYI_GOSTER(DOKTOR_LISTESI)
+    SECILEN_DOKTOR ← GİRİŞ()
+
+    UYGUN_SAATLER ← UygunSaatleriGetir(SECILEN_DOKTOR)
+    YAZ "Uygun randevu saatleri:"
+    LISTEYI_GOSTER(UYGUN_SAATLER)
+    SECILEN_SAAT ← GİRİŞ()
+
+    YAZ "Randevunuzu onaylamak istiyor musunuz? (E/H)"
+    CEVAP ← GİRİŞ()
+
+    EĞER CEVAP = "E" İSE
+        RandevuKaydet(TC, SECILEN_DOKTOR, SECILEN_SAAT)
+        YAZ "Randevunuz başarıyla oluşturuldu."
+        SMSGonder(TC, "Randevunuz onaylandı: " + SECILEN_DOKTOR + " - " + SECILEN_SAAT)
+        YAZ "SMS bilgilendirmesi gönderildi."
+    DEĞİLSE
+        YAZ "Randevu işlemi iptal edildi."
+    SON
+
+SON
+
+
+// -----------------------------
+// 2. MODÜL: TAHLİL SONUCU GÖRÜNTÜLEME SİSTEMİ
+// -----------------------------
+PROSEDÜR TahlilSonucuGoruntulemeSistemi()
+
+    YAZ "T.C. kimlik numaranızı giriniz: "
+    TC ← GİRİŞ()
+    YAZ "Şifrenizi giriniz: "
+    SIFRE ← GİRİŞ()
+
+    EĞER KimlikDogrula(TC, SIFRE) = DOĞRU İSE
+        YAZ "Kimlik doğrulama başarılı."
+    DEĞİLSE
+        YAZ "Kimlik doğrulama başarısız! Tekrar deneyiniz."
+        GERİ DÖN
+    SON
+
+    EĞER TahlilVarMi(TC) = YANLIŞ İSE
+        YAZ "Sistemde kayıtlı tahlil bulunmamaktadır."
+        GERİ DÖN
+    SON
+
+    EĞER SonucHazirMi(TC) = DOĞRU İSE
+        YAZ "Tahlil sonuçlarınız hazır."
+        SonucuGoster(TC)
+
+        YAZ "Sonucu PDF olarak indirmek ister misiniz? (E/H)"
+        CEVAP ← GİRİŞ()
+
+        EĞER CEVAP = "E" İSE
+            PDFIndir(TC)
+            YAZ "Tahlil sonucu PDF olarak indirildi."
+        DEĞİLSE
+            YAZ "PDF indirme işlemi iptal edildi."
+        SON
+    DEĞİLSE
+        YAZ "Tahlil sonuçlarınız henüz hazır değil. Lütfen daha sonra tekrar deneyiniz."
+    SON
+
+SON
+
+
+// -----------------------------
+// ORTAK FONKSİYONLAR
+// -----------------------------
+FONKSİYON KimlikDogrula(TC, SIFRE)
+    // Gerçek sistemde veri tabanı kontrolü yapılır
+    EĞER TC VE SIFRE DOĞRU İSE GERİ DÖN DOĞRU
+    DEĞİLSE GERİ DÖN YANLIŞ
+SON
