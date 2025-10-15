@@ -1,0 +1,66 @@
+digraph KayitAkisi {
+  rankdir=TB;
+  node [shape=box];
+
+  Start [label="Başla"];
+  Giris [label="Öğrenci girişi\n(öğrenci no + şifre)"];
+  Listeler [label="Ders listesini göster"];
+  SecimLoop [label="Ders ekle/çıkar/bitiş döngüsü"];
+
+  // Decision nodes (diamond)
+  KontenjanCheck [shape=diamond, label="Kontenjan boş mu?"];
+  OnkosulCheck [shape=diamond, label="Önkoşul tamam mı?"];
+  ZamanCheck [shape=diamond, label="Zaman çakışması var mı?"];
+  KrediCheck [shape=diamond, label="Toplam kredi + ders <=35?"];
+  GPACheck [shape=diamond, label="GPA < 2.5 ?"];
+  DanismanOnay [shape=diamond, label="Danışman onayı verildi mi?"];
+  OnayKayit [shape=diamond, label="Öğrenci kaydı onaylıyor mu?"];
+
+  // Process nodes
+  Ekle [label="Dersi ekle ve kontenjan++\ntoplamKredi += ders.kredi"];
+  ReddetK [label="Ekleme reddedildi\n(bilgilendir)"];
+  Sil [label="Dersi çıkar ve kontenjan--\ntoplamKredi -= ders.kredi"];
+  Ozet [label="Kayıt özeti göster"];
+  Kaydet [label="KAYDI_SISTEME_KAYDET"];
+  Hata [label="Giriş hatası\n(Durdur)"];
+  Bitir [label="Bitiş"];
+
+  // Edges
+  Start -> Giris;
+  Giris -> Listeler;
+  Listeler -> SecimLoop;
+
+  SecimLoop -> KontenjanCheck [label="Ekle isteği"];
+  KontenjanCheck -> OnkosulCheck [label="Evet"];
+  KontenjanCheck -> ReddetK [label="Hayır"];
+
+  OnkosulCheck -> ZamanCheck [label="Evet"];
+  OnkosulCheck -> ReddetK [label="Hayır"];
+
+  ZamanCheck -> KrediCheck [label="Hayır"]; // burada 'Hayır' anlamı: çakışma yok -> ilerle
+  ZamanCheck -> ReddetK [label="Evet"]; // çakışma varsa reddet
+
+  KrediCheck -> Ekle [label="Evet"];
+  KrediCheck -> ReddetK [label="Hayır"];
+
+  ReddetK -> SecimLoop [label="Devam et"];
+  Ekle -> SecimLoop;
+
+  SecimLoop -> Sil [label="Çıkarma isteği"];
+  Sil -> SecimLoop;
+
+  SecimLoop -> Ozet [label="Bitti"];
+
+  Ozet -> GPACheck;
+  GPACheck -> DanismanOnay [label="Evet (GPA<2.5)"];
+  GPACheck -> OnayKayit [label="Hayır"];
+
+  DanismanOnay -> OnayKayit [label="Onaylandı"];
+  DanismanOnay -> Bitir [label="Reddedildi"];
+
+  OnayKayit -> Kaydet [label="Evet"];
+  OnayKayit -> Bitir [label="Hayır"];
+
+  Kaydet -> Bitir;
+  Hata -> Bitir;
+}
