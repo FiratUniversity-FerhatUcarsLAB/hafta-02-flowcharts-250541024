@@ -1,0 +1,427 @@
+atm para çekme sistemi pseudocode şeklinde yaz
+ChatGPT:
+ATM Para Çekme Sistemi — Pseudocode
+
+Aşağıda bankamatikten para çekme işlemini kapsayan, hataları ve temel kontrolleri içeren Türkçe pseudocode bulunuyor. Basitçe adapte edip gerçek sisteme (veritabanı, kasa cihazı, donanım) uyarlayabilirsiniz.
+
+PROGRAM ATM_Para_Cekme
+
+// --- Sabitler / Yapılar ---
+STRUCT Account
+    id
+    pin_hash
+    balance
+    is_locked
+    daily_withdrawn_amount
+    daily_withdraw_limit
+
+STRUCT ATM
+    id
+    cash_inventory   // örn: {200:10, 100:20, 50:30, 20:50, 10:100}
+    total_cash_available()
+ENDSTRUCT
+
+ENUM TransactionResult { SUCCESS, INSUFFICIENT_FUNDS, ATM_INSUFFICIENT_CASH, INVALID_PIN, ACCOUNT_LOCKED, EXCEEDS_DAILY_LIMIT, NETWORK_ERROR, CANCELLED }
+
+// --- Yardımcı Fonksiyonlar ---
+FUNCTION verify_pin(account: Account, entered_pin: string) -> bool
+    // pin_hash karşılaştırması (hash ve salt ile)
+    RETURN check_hash(entered_pin, account.pin_hash)
+END
+
+FUNCTION calculate_dispense_combination(amount: int, atm: ATM) -> (bool, combination)
+    // Greedy veya optimizasyon algoritması kullan.
+    // combination örn: {200:1, 50:1, 20:0, ...}
+    TRY combinations that use largest bills first respecting atm.cash_inventory
+    IF found combination that sums to amount THEN
+        RETURN (true, combination)
+    ELSE
+        RETURN (false, null)
+    ENDIF
+END
+
+FUNCTION atm_has_cash_for_amount(amount: int, atm: ATM) -> bool
+    (ok, combo) = calculate_dispense_combination(amount, atm)
+    RETURN ok
+END
+
+FUNCTION update_atm_inventory(atm: ATM, combo)
+    FOR each denom IN combo
+        atm.cash_inventory[denom] -= combo[denom]
+    ENDFOR
+END
+
+FUNCTION update_account_balance(account: Account, amount: int) -> bool
+    // Transactional: DB güncellemesi
+    IF DB_transaction_begin() == false THEN RETURN false
+    TRY
+        account.balance -= amount
+        account.daily_withdrawn_amount += amount
+        DB_update_account(account)
+        DB_transaction_commit()
+        RETURN true
+    CATCH
+        DB_transaction_rollback()
+        RETURN false
+    END
+END
+
+FUNCTION log_transaction(account_id, atm_id, amount, result, details)
+    DB_insert_log({time: now(), account_id, atm_id, amount, result, details})
+END
+
+FUNCTION dispense_cash_to_customer(combo)
+    // Donanım arayüzü çağrısı
+    HW_dispense(combo) // donanım başarılı/başarısız bilgisi döndürmeli
+END
+
+FUNCTION print_receipt(details)
+    PRINTER_print(details)
+END
+
+// --- Ana İşlem Akışı ---
+FUNCTION withdraw_cash(atm: ATM, card_data, entered_pin: string, requested_amount: int) -> TransactionResult
+    // 1. Kart okuma ve hesap çekme
+    account = DB_get_account_by_card(card_data)
+    IF account == null THEN
+        log_transaction(null, atm.id, requested_amount, TransactionResult.INVALID_PIN, "Kart tanınmadı")
+        RETURN TransactionResult.INVALID_PIN
+    ENDIF
+
+    // 2. Hesap kilit kontrolü
+    IF account.is_locked THEN
+        log_transaction(account.id, atm.id, requested_amount, TransactionResult.ACCOUNT_LOCKED, "Hesap kilitli")
+        RETURN TransactionResult.ACCOUNT_LOCKED
+    ENDIF
+
+    // 3. PIN doğrulama (deneme sayısı, kilitleme mantığı)
+    IF NOT verify_pin(account, entered_pin) THEN
+        DB_increment_failed_pin_attempts(account.id)
+        IF DB_get_failed_pin_attempts(account.id) >= MAX_PIN_ATTEMPTS THEN
+            DB_lock_account(account.id)
+            log_transaction(account.id, atm.id, requested_amount, TransactionResult.INVALID_PIN, "PIN hatası - hesap kilitlendi")
+            RETURN TransactionResult.INVALID_PIN
+        ENDIF
+        log_transaction(account.id, atm.id, requested_amount, TransactionResult.INVALID_PIN, "Geçersiz PIN")
+        RETURN TransactionResult.INVALID_PIN
+    ENDIF
+    DB_reset_failed_pin_attempts(account.id)
+
+    // 4. Miktar doğrulama (pozitif, banknot formatı, maksimum/çıkarma birimleri)
+    IF requested_amount <= 0 THEN
+        RETURN TransactionResult.CANCELLED
+    ENDIF
+    IF requested_amount % smallest_denomination != 0 THEN
+        // Örn: en küçük banknot 10 TL ise 25 istenemez
+        log_transaction(account.id, atm.id, requested_amount, TransactionResult.CANCELLED, "Geçersiz miktar - banknot uyumsuz")
+        RETURN TransactionResult.CANCELLED
+    ENDIF
+
+    // 5. Hesap bakiye kontrolü
+    IF requested_amount > account.balance THEN
+        log_transaction(account.id, atm.id, requested_amount, TransactionResult.INSUFFICIENT_FUNDS, "Yetersiz bakiye")
+        RETURN TransactionResult.INSUFFICIENT_FUNDS
+    ENDIF
+
+    // 6. Günlük limit kontrolü
+    IF account.daily_withdrawn_amount + requested_amount > account.daily_withdraw_limit THEN
+        log_transaction(account.id, atm.id, requested_amount, TransactionResult.EXCEEDS_DAILY_LIMIT, "Günlük limit aşıldı")
+        RETURN TransactionResult.EXCEEDS_DAILY_LIMIT
+    ENDIF
+
+    // 7. ATM kasa kontrolü
+    IF NOT atm_has_cash_for_amount(requested_amount, atm) THEN
+        log_transaction(account.id, atm.id, requested_amount, TransactionResult.ATM_INSUFFICIENT_CASH, "ATM'de uygun nakit yok")
+        RETURN TransactionResult.ATM_INSUFFICIENT_CASH
+    ENDIF
+    (ok, combo) = calculate_dispense_combination(requested_amount, atm)
+
+    // 8. Hesap güncelleme (transactional) ve ATM güncelleme
+    success = update_account_balance(account, requested_amount)
+    IF NOT success THEN
+        log_transaction(account.id, atm.id, requested_amount, TransactionResult.NETWORK_ERROR, "Hesap güncellenemedi")
+        RETURN TransactionResult.NETWORK_ERROR
+    ENDIF
+
+    // 9. ATM'den para verme
+    hw_success = dispense_cash_to_customer(combo)
+    IF NOT hw_success THEN
+        // Donanım hatası: rollback yapılmalı (hesap bakiye geri konmalı) veya güvenli tutarlı durum
+        DB_refund_account(account.id, requested_amount) // tercihen güvenli rollback
+        log_transaction(account.id, atm.id, requested_amount, TransactionResult.NETWORK_ERROR, "Donanım arızası - iade yapıldı")
+        RETURN TransactionResult.NETWORK_ERROR
+    ENDIF
+
+    // 10. ATM envanter güncelle
+    update_atm_inventory(atm, combo)
+    log_transaction(account.id, atm.id, requested_amount, TransactionResult.SUCCESS, "Başarılı çekim, dağıtım: " + combo.toString())
+
+    // 11. Makbuz ve çıktı
+    receipt = {
+        time: now(),
+        account_id: account.id,
+        atm_id: atm.id,
+        amount: requested_amount,
+        balance_after: account.balance,
+        combo: combo
+    }
+    print_receipt(receipt)
+
+    RETURN TransactionResult.SUCCESS
+END
+
+// --- Örnek kullanım ---
+MAIN
+    atm = load_atm("ATM-01")
+    card = read_card()
+    pin = prompt_for_pin()
+    amount = prompt_for_amount()
+    result = withdraw_cash(atm, card, pin, amount)
+
+    SWITCH result
+        CASE SUCCESS:
+            show_message("İşlem başarılı. Lütfen paranızı alınız.")
+        CASE INSUFFICIENT_FUNDS:
+            show_message("Hesabınızda yeterli bakiye yok.")
+        CASE ATM_INSUFFICIENT_CASH:
+            show_message("ATM'de yeterli nakit bulunmamaktadır. Lütfen daha küçük bir tutar seçiniz.")
+        CASE INVALID_PIN:
+            show_message("Geçersiz PIN.")
+        CASE ACCOUNT_LOCKED:
+            show_message("Hesabınız kilitli. Banka ile iletişime geçiniz.")
+        CASE EXCEEDS_DAILY_LIMIT:
+            show_message("Günlük çekim limitinizi aştınız.")
+        CASE NETWORK_ERROR:
+            show_message("Sistem hatası. Lütfen daha sonra deneyiniz.")
+        CASE CANCELLED:
+            show_message("İşlem iptal edildi.")
+    ENDSWITCH
+END
+
+Ek notlar / Güvenlik & Gerçek dünya uyarlamaları
+
+PIN doğrulama için asla düz metin saklamayın; salt + güçlü hash (örn. PBKDF2 / bcrypt / Argon2) kullanın.
+
+Hesap ve ATM güncellemeleri transactional (ACID) olmalı. Donanım hatası durumunda geri alma (rollback) kesinlikle gerekli.
+
+calculate_dispense_combination algoritmasını optimize edin; greedy bazen çözüm üretir ama her zaman ideal olmayabilir — gerektiğinde backtracking kullanın.
+
+Günlük limit, anlık limit, kart tipine göre limitler (kredi vs tasarruf) gibi politikaları destekleyin.
+
+Güvenlik logları (başarısız PIN denemeleri, şüpheli aktiviteler) merkezi izleme sistemine gönderilmeli.
+
+Kullanıcı arayüzünde (ekran/tuş takımı) zaman aşımı ve iptal seçenekleri ekleyin.
+
+Fiziksel güvenlik: kamera, jamming/shoulder-surfing önlemleri, makbuz seçeneği (e-mail/SMS) düşünün.
+
+İsterseniz bu pseudocode'u belirli bir dile (Java, Python, C#) çeviririm veya calculate_dispense_combination fonksiyonunu örnek kodla açabilirim. Hangi dili istersiniz?
+
+Şunu dedin:
+türkçe yaz
+ChatGPT:
+
+Tabii 😊 Aşağıda ATM Para Çekme Sistemi için tamamen Türkçe yazılmış bir pseudocode (sözde kod) bulunuyor. Bu kod, bir kullanıcının kartını takıp şifre girerek para çekme işlemini yapmasını adım adım gösterir.
+
+💳 ATM PARA ÇEKME SİSTEMİ — SÖZDE KOD (TÜRKÇE)
+PROGRAM ATM_Para_Cekme
+
+YAPILAR:
+    HESAP
+        hesapNo
+        sifre
+        bakiye
+        hesapKilitliMi
+        gunlukCekilenTutar
+        gunlukLimit
+    SON
+
+    ATM
+        kasa        // örnek: 200, 100, 50, 20, 10 TL’lik banknot sayıları
+    SON
+
+BAŞLA
+    kart = kartOku()
+    hesap = hesapBilgisiGetir(kart)
+
+    EĞER hesap == YOKSA
+        EKRANA_YAZ("Geçersiz kart. Lütfen bankanızla iletişime geçiniz.")
+        DUR
+    SON
+
+    EĞER hesap.hesapKilitliMi == TRUE
+        EKRANA_YAZ("Hesabınız kilitli. Bankanızla iletişime geçiniz.")
+        DUR
+    SON
+
+    DENE
+        PIN = KULLANICIDAN_AL("Lütfen şifrenizi giriniz: ")
+    SON
+
+    EĞER PIN ≠ hesap.sifre İSE
+        EKRANA_YAZ("Hatalı şifre! Tekrar deneyiniz.")
+        hataliDenemeSayisi = hataliDenemeSayisi + 1
+        EĞER hataliDenemeSayisi ≥ 3 İSE
+            hesap.hesapKilitliMi = TRUE
+            EKRANA_YAZ("3 kez yanlış şifre girildi. Hesap kilitlendi.")
+            DUR
+        SON
+        TEKRAR_BAŞA_DÖN
+    SON
+
+    // Şifre doğruysa para çekim işlemi başlar
+    miktar = KULLANICIDAN_AL("Çekmek istediğiniz tutarı giriniz: ")
+
+    EĞER miktar ≤ 0 İSE
+        EKRANA_YAZ("Geçersiz tutar.")
+        DUR
+    SON
+
+    EĞER miktar % 10 ≠ 0 İSE
+        EKRANA_YAZ("Tutar 10 TL’nin katı olmalıdır.")
+        DUR
+    SON
+
+    EĞER miktar > hesap.bakiye İSE
+        EKRANA_YAZ("Yetersiz bakiye.")
+        DUR
+    SON
+
+    EĞER hesap.gunlukCekilenTutar + miktar > hesap.gunlukLimit İSE
+        EKRANA_YAZ("Günlük para çekme limitinizi aştınız.")
+        DUR
+    SON
+
+    EĞER ATMdeYeterliNakitVarMi(miktar) == FALSE
+        EKRANA_YAZ("ATM'de yeterli nakit bulunmamaktadır.")
+        DUR
+    SON
+
+    // İşlem onaylanıyor
+    ONAY = KULLANICIDAN_AL("İşlemi onaylıyor musunuz? (E/H): ")
+
+    EĞER ONAY == 'H' İSE
+        EKRANA_YAZ("İşlem iptal edildi.")
+        DUR
+    SON
+
+    // Para çekimi işlemi
+    hesap.bakiye = hesap.bakiye - miktar
+    hesap.gunlukCekilenTutar = hesap.gunlukCekilenTutar + miktar
+    ATMdenParaVer(miktar)
+
+    EKRANA_YAZ("İşlem başarılı! Lütfen paranızı alınız.")
+    EKRANA_YAZ("Kalan bakiye: " + hesap.bakiye)
+
+    makbuz = KULLANICIDAN_AL("Makbuz ister misiniz? (E/H): ")
+    EĞER makbuz == 'E' İSE
+        makbuzYazdir(hesap, miktar)
+    SON
+
+    EKRANA_YAZ("Teşekkür ederiz. İyi günler dileriz.")
+SON
+
+📘 KISA AÇIKLAMALAR
+
+kartOku() → Kullanıcının kartını okur.
+
+hesapBilgisiGetir(kart) → Kart numarasına göre kullanıcı hesabını bulur.
+
+ATMdeYeterliNakitVarMi(miktar) → ATM’nin kasasında istenen miktarda para olup olmadığını kontrol eder.
+
+ATMdenParaVer(miktar) → ATM’nin içindeki banknotlara göre parayı kullanıcıya verir.
+
+makbuzYazdir() → Tarih, saat, çekilen tutar ve kalan bakiyeyi içeren bir makbuz bastırır.
+
+İstersen bu sözde kodun akış şeması (flowchart) halini de çizebilirim veya Python, C#, Java gibi bir programlama diline dönüştürebilirim.
+Hangisini istersin?
+
+Şunu dedin:
+bu kod ile alakalı 5-6 satırlık açıklama yaz
+ChatGPT:
+
+Bu sözde kod, bir ATM’nin para çekme işlemini adım adım anlatmaktadır. Kullanıcı kartını takar, sistem kart bilgilerini doğrular ve şifre kontrolü yapılır. Şifre doğruysa, kullanıcıdan çekmek istediği tutar alınır ve hem hesabın bakiyesi hem de ATM’nin nakit durumu kontrol edilir. Tüm koşullar uygunsa para çekme işlemi gerçekleştirilir, bakiye güncellenir ve kullanıcıya makbuz seçeneği sunulur. Böylece güvenli, kontrollü ve hatalara karşı korumalı bir para çekme süreci sağlanır.
+
+Şunu dedin:
+bu sistemi dot kodu ile yaz
+ChatGPT:
+
+Elbette! 🌐
+Aşağıda ATM para çekme sistemi için hazırlanmış DOT (Graphviz) kodu yer alıyor.
+Bu kod, sistemin işlem akışını bir akış diyagramı (flowchart) biçiminde gösterir.
+Kod, Graphviz veya online araçlarda (https://dreampuf.github.io/GraphvizOnline/) görselleştirilebilir.
+
+💳 ATM Para Çekme Sistemi — DOT Kodu
+digraph ATM_Para_Cekme {
+    rankdir=TB;
+    node [shape=rectangle, style=rounded, fontname="Arial"];
+
+    START [label="Başla", shape=oval, style=filled, fillcolor=lightblue];
+    READ_CARD [label="Kartı oku"];
+    CHECK_ACCOUNT [label="Hesap bilgilerini kontrol et"];
+    INVALID_CARD [label="Geçersiz kart\nİşlemi sonlandır", shape=diamond, fillcolor=lightcoral, style=filled];
+    ACCOUNT_LOCKED [label="Hesap kilitli mi?", shape=diamond];
+    LOCKED_MSG [label="Hesap kilitli\nİşlemi sonlandır", shape=rectangle, fillcolor=lightcoral, style=filled];
+
+    ENTER_PIN [label="Kullanıcıdan şifre al"];
+    VERIFY_PIN [label="Şifre doğru mu?", shape=diamond];
+    PIN_WRONG [label="Hatalı şifre\nDeneme sayısını artır"];
+    LOCK_ACCOUNT [label="3. hatalı girişte\nHesabı kilitle", shape=rectangle, fillcolor=lightcoral, style=filled];
+
+    ENTER_AMOUNT [label="Çekilecek tutarı al"];
+    VALID_AMOUNT [label="Tutar geçerli mi?\n(>0 ve 10’un katı)", shape=diamond];
+    INVALID_AMOUNT [label="Geçersiz tutar\nİşlemi sonlandır", fillcolor=lightcoral, style=filled];
+
+    CHECK_BALANCE [label="Bakiye yeterli mi?", shape=diamond];
+    LOW_BALANCE [label="Yetersiz bakiye\nİşlemi sonlandır", fillcolor=lightcoral, style=filled];
+
+    CHECK_LIMIT [label="Günlük limit aşıldı mı?", shape=diamond];
+    LIMIT_EXCEEDED [label="Limit aşıldı\nİşlemi sonlandır", fillcolor=lightcoral, style=filled];
+
+    CHECK_ATM_CASH [label="ATM'de yeterli nakit var mı?", shape=diamond];
+    ATM_NO_CASH [label="ATM'de yeterli nakit yok\nİşlemi sonlandır", fillcolor=lightcoral, style=filled];
+
+    CONFIRM [label="Kullanıcı onayı (E/H)?", shape=diamond];
+    CANCELLED [label="İşlem iptal edildi", fillcolor=lightgrey, style=filled];
+
+    DISPENSE [label="Parayı ver ve bakiye güncelle", fillcolor=lightgreen, style=filled];
+    PRINT_RECEIPT [label="Makbuz istiyor mu?", shape=diamond];
+    RECEIPT_YES [label="Makbuz yazdır"];
+    RECEIPT_NO [label="Makbuz yazdırma"];
+    END [label="İşlem tamamlandı\nTeşekkürler", shape=oval, fillcolor=lightblue, style=filled];
+
+    // Bağlantılar
+    START -> READ_CARD -> CHECK_ACCOUNT;
+    CHECK_ACCOUNT -> INVALID_CARD [label="Geçersiz"];
+    CHECK_ACCOUNT -> ACCOUNT_LOCKED [label="Geçerli"];
+
+    ACCOUNT_LOCKED -> LOCKED_MSG [label="Evet"];
+    ACCOUNT_LOCKED -> ENTER_PIN [label="Hayır"];
+
+    ENTER_PIN -> VERIFY_PIN;
+    VERIFY_PIN -> PIN_WRONG [label="Hayır"];
+    VERIFY_PIN -> ENTER_AMOUNT [label="Evet"];
+    PIN_WRONG -> LOCK_ACCOUNT [label="3. hatalı giriş"];
+    PIN_WRONG -> ENTER_PIN [label="Tekrar dene"];
+
+    ENTER_AMOUNT -> VALID_AMOUNT;
+    VALID_AMOUNT -> INVALID_AMOUNT [label="Hayır"];
+    VALID_AMOUNT -> CHECK_BALANCE [label="Evet"];
+
+    CHECK_BALANCE -> LOW_BALANCE [label="Hayır"];
+    CHECK_BALANCE -> CHECK_LIMIT [label="Evet"];
+
+    CHECK_LIMIT -> LIMIT_EXCEEDED [label="Evet"];
+    CHECK_LIMIT -> CHECK_ATM_CASH [label="Hayır"];
+
+    CHECK_ATM_CASH -> ATM_NO_CASH [label="Hayır"];
+    CHECK_ATM_CASH -> CONFIRM [label="Evet"];
+
+    CONFIRM -> CANCELLED [label="Hayır"];
+    CONFIRM -> DISPENSE [label="Evet"];
+
+    DISPENSE -> PRINT_RECEIPT;
+    PRINT_RECEIPT -> RECEIPT_YES [label="Evet"];
+    PRINT_RECEIPT -> RECEIPT_NO [label="Hayır"];
+    RECEIPT_YES -> END;
+    RECEIPT_NO -> END;
+}
