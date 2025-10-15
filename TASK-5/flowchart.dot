@@ -1,0 +1,20 @@
+digraph AkilliEvGD {
+  rankdir=TB;
+  node [shape=box, style=rounded];
+
+  Start -> OkuSensörler [label="Başlat"];
+  OkuSensörler -> TehditTespiti [label="Tüm sensörler okunur"];
+  TehditTespiti -> KameraAktivasyon [label="Tehdit varsa"];
+  KameraAktivasyon -> YanlisAlarmKontrol [label="Kamera gerekiyorsa"];
+  YanlisAlarmKontrol -> AlarmSeviyesi [label="Ev sahibi kontrolü"];
+  AlarmSeviyesi -> BildirimGonder [label="Seviyeyi belirle"];
+  BildirimGonder -> Bekle [label="SMS+App+Email"];
+  Bekle -> SorgulaSifirla [label="Bekle ve tekrar kontrol et"];
+  SorgulaSifirla -> Start [label="Geri dön", color=black];
+  // Sonsuzluğu vurgulamak için geri ok üzerinde etiket
+  SorgulaSifirla -> OkuSensörler [label="Sürekli", style=bold, color=blue];
+
+  // Opsiyonel: alarm sıfırlama dalı
+  SorgulaSifirla -> AlarmSifirla [label="Sıfırlama komutu?"];
+  AlarmSifirla -> Start [label="Sıfırlandı"];
+}
