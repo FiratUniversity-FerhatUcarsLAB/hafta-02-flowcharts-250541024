@@ -1,0 +1,74 @@
+digraph ATM_Para_Cekme {
+    rankdir=TB;
+    node [shape=rectangle, style=rounded, fontname="Arial"];
+
+    START [label="Başla", shape=oval, style=filled, fillcolor=lightblue];
+    READ_CARD [label="Kartı oku"];
+    CHECK_ACCOUNT [label="Hesap bilgilerini kontrol et"];
+    INVALID_CARD [label="Geçersiz kart\nİşlemi sonlandır", shape=diamond, fillcolor=lightcoral, style=filled];
+    ACCOUNT_LOCKED [label="Hesap kilitli mi?", shape=diamond];
+    LOCKED_MSG [label="Hesap kilitli\nİşlemi sonlandır", shape=rectangle, fillcolor=lightcoral, style=filled];
+
+    ENTER_PIN [label="Kullanıcıdan şifre al"];
+    VERIFY_PIN [label="Şifre doğru mu?", shape=diamond];
+    PIN_WRONG [label="Hatalı şifre\nDeneme sayısını artır"];
+    LOCK_ACCOUNT [label="3. hatalı girişte\nHesabı kilitle", shape=rectangle, fillcolor=lightcoral, style=filled];
+
+    ENTER_AMOUNT [label="Çekilecek tutarı al"];
+    VALID_AMOUNT [label="Tutar geçerli mi?\n(>0 ve 10’un katı)", shape=diamond];
+    INVALID_AMOUNT [label="Geçersiz tutar\nİşlemi sonlandır", fillcolor=lightcoral, style=filled];
+
+    CHECK_BALANCE [label="Bakiye yeterli mi?", shape=diamond];
+    LOW_BALANCE [label="Yetersiz bakiye\nİşlemi sonlandır", fillcolor=lightcoral, style=filled];
+
+    CHECK_LIMIT [label="Günlük limit aşıldı mı?", shape=diamond];
+    LIMIT_EXCEEDED [label="Limit aşıldı\nİşlemi sonlandır", fillcolor=lightcoral, style=filled];
+
+    CHECK_ATM_CASH [label="ATM'de yeterli nakit var mı?", shape=diamond];
+    ATM_NO_CASH [label="ATM'de yeterli nakit yok\nİşlemi sonlandır", fillcolor=lightcoral, style=filled];
+
+    CONFIRM [label="Kullanıcı onayı (E/H)?", shape=diamond];
+    CANCELLED [label="İşlem iptal edildi", fillcolor=lightgrey, style=filled];
+
+    DISPENSE [label="Parayı ver ve bakiye güncelle", fillcolor=lightgreen, style=filled];
+    PRINT_RECEIPT [label="Makbuz istiyor mu?", shape=diamond];
+    RECEIPT_YES [label="Makbuz yazdır"];
+    RECEIPT_NO [label="Makbuz yazdırma"];
+    END [label="İşlem tamamlandı\nTeşekkürler", shape=oval, fillcolor=lightblue, style=filled];
+
+    // Bağlantılar
+    START -> READ_CARD -> CHECK_ACCOUNT;
+    CHECK_ACCOUNT -> INVALID_CARD [label="Geçersiz"];
+    CHECK_ACCOUNT -> ACCOUNT_LOCKED [label="Geçerli"];
+
+    ACCOUNT_LOCKED -> LOCKED_MSG [label="Evet"];
+    ACCOUNT_LOCKED -> ENTER_PIN [label="Hayır"];
+
+    ENTER_PIN -> VERIFY_PIN;
+    VERIFY_PIN -> PIN_WRONG [label="Hayır"];
+    VERIFY_PIN -> ENTER_AMOUNT [label="Evet"];
+    PIN_WRONG -> LOCK_ACCOUNT [label="3. hatalı giriş"];
+    PIN_WRONG -> ENTER_PIN [label="Tekrar dene"];
+
+    ENTER_AMOUNT -> VALID_AMOUNT;
+    VALID_AMOUNT -> INVALID_AMOUNT [label="Hayır"];
+    VALID_AMOUNT -> CHECK_BALANCE [label="Evet"];
+
+    CHECK_BALANCE -> LOW_BALANCE [label="Hayır"];
+    CHECK_BALANCE -> CHECK_LIMIT [label="Evet"];
+
+    CHECK_LIMIT -> LIMIT_EXCEEDED [label="Evet"];
+    CHECK_LIMIT -> CHECK_ATM_CASH [label="Hayır"];
+
+    CHECK_ATM_CASH -> ATM_NO_CASH [label="Hayır"];
+    CHECK_ATM_CASH -> CONFIRM [label="Evet"];
+
+    CONFIRM -> CANCELLED [label="Hayır"];
+    CONFIRM -> DISPENSE [label="Evet"];
+
+    DISPENSE -> PRINT_RECEIPT;
+    PRINT_RECEIPT -> RECEIPT_YES [label="Evet"];
+    PRINT_RECEIPT -> RECEIPT_NO [label="Hayır"];
+    RECEIPT_YES -> END;
+    RECEIPT_NO -> END;
+}
