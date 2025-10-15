@@ -1,0 +1,38 @@
+digraph OnlineAlisverisSepeti {
+    rankdir=TB; // Yukarıdan aşağı yön
+    node [shape=rectangle, style=rounded, fontname="Arial", fontsize=11];
+
+    Start [label="Başla", shape=circle, style=filled, fillcolor=lightgreen];
+    UrunEkle [label="Ürün sepete eklendi mi?"];
+    StokKontrol [label="Stok durumu kontrol et"];
+    StokYok [label="Stok yetersiz\nAdet stok seviyesine ayarlanır"];
+    SepeteEkle [label="Ürün sepete eklenir veya\nadet güncellenir"];
+    UrunCikar [label="Ürün sepetten çıkarıldı mı?"];
+    SepettenSil [label="Ürün sepetten silinir"];
+    IndirimUygula [label="İndirim / kupon kodu uygulanır"];
+    AraToplam [label="Ara toplam, vergi ve kargo hesaplanır"];
+    Odeme [label="Ödeme bilgileri girilir"];
+    Dogrulama [label="Adres ve ödeme bilgileri doğrulanır"];
+    OdemeBasarili [label="Ödeme başarılı"];
+    SiparisKaydet [label="Sipariş kaydedilir\nve stok güncellenir"];
+    OdemeBasarisiz [label="Ödeme başarısız\nHata mesajı gösterilir"];
+    Bitis [label="Bitiş", shape=doublecircle, style=filled, fillcolor=lightblue];
+
+    Start -> UrunEkle;
+    UrunEkle -> StokKontrol [label="Evet"];
+    UrunEkle -> UrunCikar [label="Hayır"];
+    StokKontrol -> StokYok [label="Yetersiz"];
+    StokKontrol -> SepeteEkle [label="Yeterli"];
+    StokYok -> SepeteEkle;
+    SepeteEkle -> IndirimUygula;
+    UrunCikar -> SepettenSil [label="Evet"];
+    SepettenSil -> IndirimUygula;
+    IndirimUygula -> AraToplam;
+    AraToplam -> Odeme;
+    Odeme -> Dogrulama;
+    Dogrulama -> OdemeBasarili [label="Geçerli"];
+    Dogrulama -> OdemeBasarisiz [label="Geçersiz"];
+    OdemeBasarili -> SiparisKaydet;
+    SiparisKaydet -> Bitis;
+    OdemeBasarisiz -> Bitis;
+}
