@@ -1,0 +1,253 @@
+Online Alışveriş Sepeti yönetimi pseudocode şeklinde türkçe yaz
+ChatGPT:
+4 saniye düşündüm
+Online Alışveriş Sepeti Yönetimi — Pseudocode (Türkçe)
+/* Veri yapıları */
+SEPET = {
+  items: []  // her öğe: { productId, isim, fiyat, adet, stok, vergiler, seçenekler }
+  userId: null   // giriş yapılmışsa kullanıcı id'si
+  promos: []     // uygulanmış kupon/indirim kodları
+  currency: "TRY"
+}
+
+/* Yardımcı fonksiyonlar */
+Fonksiyon BulItem(productId):
+  için her item in SEPET.items:
+    eğer item.productId == productId ise dön item
+  dön null
+
+Fonksiyon HesaplaAraToplam():
+  total = 0
+  için her item in SEPET.items:
+    total = total + (item.fiyat * item.adet)
+  dön total
+
+Fonksiyon HesaplaVergi():
+  vergi = 0
+  için her item in SEPET.items:
+    vergi = vergi + ((item.fiyat * item.adet) * item.vergiler)
+  dön vergi
+
+Fonksiyon UygulaIndirim(kuponKodu):
+  eğer KuponGeçerliMi(kuponKodu) ise
+    promos = HesaplaKuponİndirimi(kuponKodu, SEPET)
+    SEPET.promos.append(promos)
+    dön true
+  aksi halde dön false
+
+/* Temel işlemler */
+Fonksiyon SepeteEkle(product):
+  mevcut = BulItem(product.productId)
+  eğer mevcut != null ise
+    yeniAdet = mevcut.adet + product.adet
+    eğer yeniAdet > product.stok ise
+      göster "Yeterli stok yok"
+      mevcut.adet = product.stok
+    başka
+      mevcut.adet = yeniAdet
+  başka
+    eğer product.adet <= product.stok ise
+      SEPET.items.append(product)
+    başka
+      product.adet = product.stok
+      SEPET.items.append(product)
+
+Fonksiyon SepettenÇıkar(productId):
+  item = BulItem(productId)
+  eğer item != null ise
+    SEPET.items.remove(item)
+  başka
+    göster "Ürün sepette yok"
+
+Fonksiyon AdetGüncelle(productId, yeniAdet):
+  item = BulItem(productId)
+  eğer item == null ise göster "Ürün bulunamadı" ve dön
+  eğer yeniAdet <= 0 ise
+    SepettenÇıkar(productId)
+    dön
+  eğer yeniAdet > item.stok ise
+    item.adet = item.stok
+    göster "İstenen adetten az stok var; adet stok seviyesine ayarlandı"
+  başka
+    item.adet = yeniAdet
+
+Fonksiyon HesaplaToplam():
+  araToplam = HesaplaAraToplam()
+  vergi = HesaplaVergi()
+  indirimToplam = 0
+  için her promo in SEPET.promos:
+    indirimToplam = indirimToplam + promo.tutar
+  kargo = HesaplaKargo(araToplam)
+  toplam = araToplam + vergi + kargo - indirimToplam
+  eğer toplam < 0 ise toplam = 0
+  dön { araToplam, vergi, kargo, indirimToplam, toplam }
+
+Fonksiyon Ödemeİşle(ödemeBilgisi):
+  ödemeyeHazır = DoğrulaAdresVeÖdeme(SEPET, ödemeBilgisi)
+  eğer !ödemeyeHazır ise
+    göster "Adres veya ödeme bilgileri eksik/yanlış"
+    dön false
+  result = ÖdemeGateway.Öde(ödemeBilgisi, HesaplaToplam().toplam)
+  eğer result.başarılı ise
+    StoğuGüncelle(SEPET.items)
+    SiparişKaydet(SEPET, result)
+    SEPET.items = []
+    SEPET.promos = []
+    göster "Ödeme başarılı, sipariş numarası: " + result.siparisNo
+    dön true
+  aksi halde
+    göster "Ödeme başarısız: " + result.hata
+    dön false
+
+/* Ek fonksiyonlar (sistem entegrasyonu) */
+Fonksiyon StoğuGüncelle(items):
+  için her item in items:
+    ÜrünServisi.AzaltStok(item.productId, item.adet)
+
+Fonksiyon SiparişKaydet(sepet, ödemeSonucu):
+  siparis = {
+    userId: sepet.userId,
+    items: sepet.items,
+    toplam: HesaplaToplam().toplam,
+    ödemeId: ödemeSonucu.id,
+    tarih: Şimdi()
+  }
+  SiparişVeritabanı.Kaydet(siparis)
+
+Fonksiyon KuponGeçerliMi(kod):
+  // kupon doğrulama mantığı: tarih, kullanım sayısı, minimum sepet tutarı
+  dön KuponServisi.Doğrula(kod, HesaplaAraToplam())
+
+Fonksiyon HesaplaKargo(araToplam):
+  eğer araToplam >= ÜcretsizKargoEşiği ise dön 0
+  aksi halde dön KargoTablosundanTutar(araToplam)
+
+
+Kısa açıklama (5-6 satır, Türkçe)
+
+Pseudocode, bir sepet veri yapısı ve ürün öğelerini yönetmek için gerekli temel fonksiyonları (ekle, çıkar, adet güncelle, toplam hesapla) içerir.
+
+İndirim/kuponlar, vergi ve kargo hesaplamaları ayrı adımlarda toplanıp nihai toplam hesaplanır.
+
+Ödeme adımı, adres ve ödeme doğrulaması, ödeme sağlayıcı entegrasyonu ve stok/gönderi işlemlerini kapsar.
+
+Stok kontrolü her ekleme/güncelleme sırasında yapılır; stok yetersizse kullanıcı bilgilendirilir ve adet stok seviyesine çekilir.
+
+Sipariş başarılı olunca sipariş veritabanına kaydedilir, stok güncellenir ve sepet temizlenir; başarısızsa hata kullanıcıya gösterilir.
+
+İstersen bu pseudocode'u DOT ile akış diyagramına veya gerçek bir programlama diline (ör. Python/JavaScript) çevireyim. Hangi format istersin?
+
+Şunu dedin:
+bu kod ile alakalı 5-6 satırlık açıklama yaz
+ChatGPT:
+
+Bu pseudocode, bir online alışveriş sepeti yönetim sisteminin temel işleyişini adım adım açıklar.
+Kullanıcı, sepete ürün ekleyebilir, çıkarabilir veya adet güncelleyebilir.
+Sistem, stok kontrolü, vergi, kargo ve indirim kuponu işlemlerini ayrı fonksiyonlarla yönetir.
+Sepet toplamı, tüm bu etkenler hesaba katılarak dinamik biçimde hesaplanır.
+Ödeme aşamasında, ödeme doğrulaması ve stok güncellemesi yapılır; başarılı olursa sipariş veritabanına kaydedilir.
+Bu yapı, e-ticaret sitelerinde güvenli ve düzenli bir alışveriş süreci sağlamayı amaçlar.
+
+Şunu dedin:
+bu sistemi dot kodu ile yaz
+ChatGPT:
+
+Elbette! Aşağıda Online Alışveriş Sepeti Yönetimi sisteminin akışını gösteren bir DOT (Graphviz) kodu bulunuyor.
+Bu kodu .dot uzantılı bir dosya olarak kaydedip Graphviz gibi bir araçla görselleştirebilirsin.
+
+digraph OnlineAlisverisSepeti {
+    rankdir=LR;
+    node [shape=rectangle, style=rounded, fontname="Arial"];
+
+    Start [label="Başla", shape=circle, style=filled, fillcolor=lightgreen];
+    UrunEkle [label="Ürün sepete eklendi mi?"];
+    StokKontrol [label="Stok durumu kontrol et"];
+    StokYok [label="Stok yetersiz\nAdet stok seviyesine ayarlanır"];
+    SepeteEkle [label="Ürün sepete eklenir veya\nadet güncellenir"];
+    UrunCikar [label="Ürün sepetten çıkarıldı mı?"];
+    SepettenSil [label="Ürün sepetten silinir"];
+    IndirimUygula [label="İndirim / kupon kodu uygulanır"];
+    AraToplam [label="Ara toplam, vergi ve kargo hesaplanır"];
+    Odeme [label="Ödeme bilgileri girilir"];
+    Dogrulama [label="Adres ve ödeme bilgileri doğrulanır"];
+    OdemeBasarili [label="Ödeme başarılı"];
+    SiparisKaydet [label="Sipariş kaydedilir\nve stok güncellenir"];
+    OdemeBasarisiz [label="Ödeme başarısız\nHata mesajı gösterilir"];
+    Bitis [label="Bitiş", shape=doublecircle, style=filled, fillcolor=lightblue];
+
+    Start -> UrunEkle;
+    UrunEkle -> StokKontrol [label="Evet"];
+    UrunEkle -> UrunCikar [label="Hayır"];
+    StokKontrol -> StokYok [label="Yetersiz"];
+    StokKontrol -> SepeteEkle [label="Yeterli"];
+    StokYok -> SepeteEkle;
+    SepeteEkle -> IndirimUygula;
+    UrunCikar -> SepettenSil [label="Evet"];
+    SepettenSil -> IndirimUygula;
+    IndirimUygula -> AraToplam;
+    AraToplam -> Odeme;
+    Odeme -> Dogrulama;
+    Dogrulama -> OdemeBasarili [label="Geçerli"];
+    Dogrulama -> OdemeBasarisiz [label="Geçersiz"];
+    OdemeBasarili -> SiparisKaydet;
+    SiparisKaydet -> Bitis;
+    OdemeBasarisiz -> Bitis;
+}
+
+
+Bu diyagram şu süreci temsil eder:
+
+Kullanıcı ürünü sepete ekler → stok kontrolü yapılır.
+
+Stok varsa ürün eklenir, yoksa adet stok miktarına ayarlanır.
+
+Kupon/indirim uygulanır → toplam hesaplanır.
+
+Ödeme doğrulanır → başarılıysa sipariş kaydedilir, başarısızsa hata verilir.
+
+İstersen bu DOT kodunu görsel hâle getirip (örneğin bir akış diyagramı olarak) senin için çizebilirim. İster misin?
+
+Şunu dedin:
+bunu yukardan aşağı olacak şekilde düzenle
+ChatGPT:
+
+Tabii! Aşağıdaki DOT (Graphviz) kodu, online alışveriş sepeti yönetim sistemi akışını yukarıdan aşağı (top-down) şekilde düzenlenmiş olarak gösterir.
+
+digraph OnlineAlisverisSepeti {
+    rankdir=TB; // Yukarıdan aşağı yön
+    node [shape=rectangle, style=rounded, fontname="Arial", fontsize=11];
+
+    Start [label="Başla", shape=circle, style=filled, fillcolor=lightgreen];
+    UrunEkle [label="Ürün sepete eklendi mi?"];
+    StokKontrol [label="Stok durumu kontrol et"];
+    StokYok [label="Stok yetersiz\nAdet stok seviyesine ayarlanır"];
+    SepeteEkle [label="Ürün sepete eklenir veya\nadet güncellenir"];
+    UrunCikar [label="Ürün sepetten çıkarıldı mı?"];
+    SepettenSil [label="Ürün sepetten silinir"];
+    IndirimUygula [label="İndirim / kupon kodu uygulanır"];
+    AraToplam [label="Ara toplam, vergi ve kargo hesaplanır"];
+    Odeme [label="Ödeme bilgileri girilir"];
+    Dogrulama [label="Adres ve ödeme bilgileri doğrulanır"];
+    OdemeBasarili [label="Ödeme başarılı"];
+    SiparisKaydet [label="Sipariş kaydedilir\nve stok güncellenir"];
+    OdemeBasarisiz [label="Ödeme başarısız\nHata mesajı gösterilir"];
+    Bitis [label="Bitiş", shape=doublecircle, style=filled, fillcolor=lightblue];
+
+    Start -> UrunEkle;
+    UrunEkle -> StokKontrol [label="Evet"];
+    UrunEkle -> UrunCikar [label="Hayır"];
+    StokKontrol -> StokYok [label="Yetersiz"];
+    StokKontrol -> SepeteEkle [label="Yeterli"];
+    StokYok -> SepeteEkle;
+    SepeteEkle -> IndirimUygula;
+    UrunCikar -> SepettenSil [label="Evet"];
+    SepettenSil -> IndirimUygula;
+    IndirimUygula -> AraToplam;
+    AraToplam -> Odeme;
+    Odeme -> Dogrulama;
+    Dogrulama -> OdemeBasarili [label="Geçerli"];
+    Dogrulama -> OdemeBasarisiz [label="Geçersiz"];
+    OdemeBasarili -> SiparisKaydet;
+    SiparisKaydet -> Bitis;
+    OdemeBasarisiz -> Bitis;
+}
